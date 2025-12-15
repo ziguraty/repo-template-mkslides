@@ -4,4 +4,5 @@ index:
 slides:
     charset: utf-8
     separator: <!--s-->
+    separator_vertical: <!--v-->
     separator_notes: "^Notes?:"
