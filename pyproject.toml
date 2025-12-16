@@ -30,4 +30,5 @@ dev = [
 [tool.taskipy.tasks]
 build = { cmd = "mkslides build", help = "Builds the html files." }
 serve = { cmd = "mkslides serve", help = "Runs the server." }
+list = { cmd = "task --list", help = "List all tasks." }
 test = { cmd = "pytest", help = "Runs all unit tests." }
