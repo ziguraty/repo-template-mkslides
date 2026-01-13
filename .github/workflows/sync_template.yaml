@@ -1,0 +1,92 @@
+name: Sync template from upstream
+
+on:
+  schedule:
+    # At 00:00 on Monday (UTC)
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        uses: qoomon/actions--setup-git@v1
+
+      - name: Read upstream from pyproject.toml
+        id: upstream
+        run: |
+          python - <<'EOF'
+          import tomllib
+          from pathlib import Path
+          import os
+
+          data = tomllib.loads(Path("pyproject.toml").read_text())
+
+          upstream = (
+              data
+              .get("tool", {})
+              .get("repo-template", {})
+              .get("upstream", "")
+              .strip()
+          )
+
+          has_upstream = bool(upstream)
+
+          github_output = os.environ["GITHUB_OUTPUT"]
+
+          with open(github_output, "a") as f:
+              f.write(f"has_upstream={str(has_upstream).lower()}\n")
+              if has_upstream:
+                  f.write(f"upstream={upstream}\n")
+          EOF
+
+      - name: Check for upstream changes
+        if: steps.upstream.outputs.has_upstream == 'true'
+        id: diff
+        run: |
+          git remote add upstream ${{ steps.upstream.outputs.upstream }} || true
+          git fetch upstream
+          if git log HEAD..upstream/main --oneline | grep .; then
+            echo "changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream changes
+        if: >
+          steps.upstream.outputs.has_upstream == 'true' &&
+          steps.diff.outputs.changes == 'true'
+        run: |
+          git merge upstream/main --no-edit
+
+      - name: Create Pull Request
+        if: >
+          steps.upstream.outputs.has_upstream == 'true' &&
+          steps.diff.outputs.changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          base: main
+          branch: sync-template
+          delete-branch: true
+          title: "Sync template updates"
+          body: |
+            🤖 **Automated template sync**
+
+            This pull request was automatically created by the
+            **`${{ github.workflow }}`** workflow.
+
+            🔗 Run details:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            📦 Source: `upstream/main`
